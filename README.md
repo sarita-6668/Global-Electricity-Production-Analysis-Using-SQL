@@ -1,166 +1,64 @@
-# Global Electricity Production Analysis Using SQL
+## Global Electricity Production Analysis: Trends in Renewable Energy
 Overview
-This project examines global electricity production, focusing on the growth and share of renewable energy sources over the past decade. The primary objective is to identify key trends and countries leading the transition to sustainable energy. Through SQL-based data analysis, the project uncovers insights into energy production patterns, highlighting the shift from fossil fuels to renewable sources and recognizing nations spearheading clean energy adoption.
+This project analyzes global electricity production data, focusing on the growth and share of renewable energy sources over the past decade. The goal is to identify key trends and countries leading the transition to sustainable energy. Using SQL, the project uncovers insights into energy production patterns, highlighting the shift from traditional to renewable sources and the nations driving clean energy adoption.
 
 Objectives
 Analyze the growth of renewable energy production over the past decade.
-Determine the share of different energy sources in total electricity production by country.
-Identify countries with significant shifts towards renewable energy.
+Determine the share of energy sources in total electricity production by country.
+Identify countries with significant shifts toward renewable energy.
 Compare global trends in energy production.
-Highlight the leading countries in clean energy transitions.
+Highlight leading countries in clean energy transitions.
 Dataset
-This analysis is based on the Electricity Dataset from Kaggle, which contains electricity production data by source for various countries over multiple years.
+The data for this project is sourced from the Kaggle dataset on electricity production. It includes information on energy generation from different sources such as coal, gas, nuclear, hydro, solar, oil, wind, bioenergy, and other renewables across multiple years and countries.
 
-Schema & Data Processing
-The dataset was structured using the following schema:
+Business Questions & Insights
+1. Countries with the Highest Growth in Renewable Energy
+Over the last decade, several countries have significantly increased their renewable electricity production. The analysis highlights nations that have made the most progress in wind, solar, hydro, and bioenergy generation.
 
-sql
-Copy
-Edit
-CREATE TABLE energy_data (
-    id SERIAL PRIMARY KEY,
-    Country TEXT,
-    Code TEXT,
-    Year INT,
-    Coal NUMERIC,
-    Gas NUMERIC,
-    Nuclear NUMERIC,
-    Hydro NUMERIC,
-    Solar NUMERIC,
-    Oil NUMERIC,
-    Wind NUMERIC,
-    Bioenergy NUMERIC,
-    Other_renewables NUMERIC
-);
-Data Loading & Cleaning
-The dataset was loaded into the table and cleaned to replace NULL values with 0:
+2. Energy Source Distribution by Country
+For the most recent year in the dataset, the proportion of each energy source in total electricity production was analyzed. This provides insights into the reliance on traditional vs. renewable energy sources in different nations.
 
-sql
-Copy
-Edit
-UPDATE energy_data
-SET
-    Coal = COALESCE(Coal, 0),
-    Gas = COALESCE(Gas, 0),
-    Nuclear = COALESCE(Nuclear, 0),
-    Hydro = COALESCE(Hydro, 0),
-    Solar = COALESCE(Solar, 0),
-    Oil = COALESCE(Oil, 0),
-    Wind = COALESCE(Wind, 0),
-    Bioenergy = COALESCE(Bioenergy, 0),
-    Other_renewables = COALESCE(Other_renewables, 0);
-Business Questions & Solutions
-1. Countries with the Highest Growth in Renewable Energy (Last 10 Years)
-This query identifies the countries that have significantly increased their renewable electricity production over the past decade.
+3. Year with the Highest Global Nuclear Energy Production
+The analysis identifies the year in which nuclear energy production peaked worldwide, showing trends in the use of nuclear power over time.
 
-sql
-Copy
-Edit
-WITH total_renew_last_year AS (
-    SELECT country, (wind + solar + hydro + bioenergy + other_renewables) AS total_end
-    FROM energy_data
-    WHERE year = (SELECT MAX(year) FROM energy_data)
-),
-total_renew_10_years_ago AS (
-    SELECT country, (wind + solar + hydro + bioenergy + other_renewables) AS total_start
-    FROM energy_data
-    WHERE year = (SELECT MAX(year) - 10 FROM energy_data)
-)
-SELECT country,
-       ROUND(lst.total_end - ago.total_start, 2) AS energy_diff,
-       ROUND(((lst.total_end - ago.total_start)/ago.total_start*100), 2) AS energy_diff_percentage
-FROM total_renew_last_year lst
-JOIN total_renew_10_years_ago ago USING (country)
-WHERE lst.total_end > 0 AND ago.total_start > 0
-ORDER BY energy_diff DESC;
-2. Energy Source Share in Electricity Production (Last Year)
-This query calculates the percentage contribution of each energy source to total electricity production per country in the most recent year.
-
-sql
-Copy
-Edit
-WITH total_cte AS (
-    SELECT country, year, coal, gas, nuclear, hydro, solar, oil, wind, bioenergy, other_renewables,
-           (coal + gas + nuclear + hydro + solar + oil + wind + bioenergy + other_renewables) AS total_energy
-    FROM energy_data
-    WHERE year = (SELECT MAX(year) FROM energy_data)
-)
-SELECT country,
-       ROUND(coal/total_energy*100, 2) AS coal_portion,
-       ROUND(gas/total_energy*100, 2) AS gas_portion,
-       ROUND(nuclear/total_energy*100, 2) AS nuclear_portion,
-       ROUND(hydro/total_energy*100, 2) AS hydro_portion,
-       ROUND(solar/total_energy*100, 2) AS solar_portion,
-       ROUND(oil/total_energy*100, 2) AS oil_portion,
-       ROUND(wind/total_energy*100, 2) AS wind_portion,
-       ROUND(bioenergy/total_energy*100, 2) AS bioenergy_portion,
-       ROUND(other_renewables/total_energy*100, 2) AS other_renewables_portion,
-       ROUND(total_energy, 2)
-FROM total_cte
-WHERE total_energy > 0
-ORDER BY total_energy DESC;
-3. Most Productive Year for Nuclear Energy
-This query identifies the year with the highest global electricity production from nuclear energy.
-
-sql
-Copy
-Edit
-SELECT year, SUM(nuclear) AS total_nuclear
-FROM energy_data
-GROUP BY year
-ORDER BY total_nuclear DESC
-LIMIT 1;
 4. Countries with Declining Electricity Production Despite Global Growth
-This query finds countries where electricity production declined in certain years, even as global production increased.
+While global electricity production has generally increased, some countries have experienced periods of decline. These cases were identified to understand the reasons behind such trends.
 
-sql
-Copy
-Edit
-WITH world_energy AS (
-    SELECT year, SUM(coal + gas + nuclear + hydro + solar + oil + wind + bioenergy + other_renewables) AS total_energy
-    FROM energy_data
-    GROUP BY year
-),
-world_growth AS (
-    SELECT year, total_energy, 
-           total_energy - LAG(total_energy) OVER (ORDER BY year) AS diff_to_prev_year
-    FROM world_energy
-),
-country_energy AS (
-    SELECT country, year,
-           coal + gas + nuclear + hydro + solar + oil + wind + bioenergy + other_renewables AS total_energy
-    FROM energy_data
-),
-country_decline AS (
-    SELECT country, year, total_energy, 
-           total_energy - LAG(total_energy) OVER (PARTITION BY country ORDER BY year) AS diff_to_prev_year
-    FROM country_energy
-)
-SELECT country, year, diff_to_prev_year
-FROM country_decline
-WHERE diff_to_prev_year < 0
-AND year IN (SELECT year FROM world_growth WHERE diff_to_prev_year > 0)
-ORDER BY diff_to_prev_year ASC;
-5. Countries Producing More Electricity from Renewables than Coal (2023)
-This query identifies countries that produced more electricity from renewable sources than coal in 2023.
+5. Countries with the Largest Variation in Natural Gas Production
+The study highlights the top five countries with the biggest difference between their minimum and maximum electricity production from natural gas, reflecting changes in energy policies and resources.
 
-sql
-Copy
-Edit
-WITH renew_vs_coal AS (
-    SELECT country, year, coal, 
-           (wind + solar + hydro + bioenergy + other_renewables) AS total_renewables
-    FROM energy_data
-)
-SELECT country, year, coal, total_renewables, total_renewables - coal AS difference
-FROM renew_vs_coal
-WHERE coal < total_renewables AND year = 2023
-ORDER BY difference DESC;
+6. First Country to Generate Solar Energy
+The first country to produce electricity from solar energy and the year it happened were identified, showcasing early adoption of solar technology.
+
+7. Countries Producing More Renewable Energy Than Coal in 2023
+For the year 2023, countries where electricity production from renewable sources exceeded coal-based production were examined, demonstrating a shift towards cleaner energy.
+
+8. Countries Producing Twice as Much Renewable Energy as Coal in the Last Decade
+The analysis identifies countries that, over the past 10 years, have generated at least twice as much electricity from renewable sources compared to coal.
+
+9. Dominant Energy Source in Each Country (Coal vs. Renewables)
+For the entire dataset period (1965–2023), the dominant energy source in each country was determined, highlighting whether coal or renewable sources were more prevalent.
+
+10. Countries Producing Over 60% of Their Electricity from Renewables in the Last Decade
+The analysis reveals nations where renewable energy sources accounted for more than 60% of total electricity production in the last 10 years.
+
+Key Takeaways
+✅ Renewable Energy Growth is Accelerating: Many countries have significantly increased their renewable energy production in the past decade, with wind and solar leading the transition.
+
+✅ Coal Dependence is Declining, But Not Eliminated: Some countries still rely on coal, but a growing number have surpassed coal production with renewable sources.
+
+✅ Global Nuclear Production Has Fluctuated: While nuclear power remains a key energy source, its production has varied due to policy changes and energy demand shifts.
+
+✅ Energy Transitions Vary by Region: Developed nations are leading in renewables, while developing countries still face infrastructure and policy challenges in making the shift.
+
+✅ The First Movers in Solar Energy: Early adopters of solar energy paved the way for broader adoption, demonstrating the potential of sustainable energy.
+
+✅ Some Countries Have Faced Declines in Energy Production: Despite global growth in electricity production, certain nations have seen declines, indicating economic or policy-driven shifts.
+
+✅ More Countries are Reaching 60%+ Renewable Share: Several nations now generate over 60% of their electricity from renewables, showing that large-scale clean energy transitions are achievable.
+
 Findings & Conclusion
-Growth in Renewables: Several countries have significantly increased their renewable energy production in the last decade, with some leading in wind, solar, and hydroelectric power.
-Energy Distribution: Renewable energy sources now contribute more electricity than traditional fossil fuels in several countries.
-Challenges & Opportunities: While many nations are transitioning to clean energy, others remain dependent on fossil fuels, highlighting both challenges and investment opportunities for future energy policies.
-Final Thoughts
-This SQL-based analysis provides valuable insights into global energy trends, helping policymakers, researchers, and investors understand electricity production dynamics.
-
-🔹 Thank you for exploring my SQL project! 🚀
+Growth in Renewables: Many countries have made significant progress in increasing electricity production from renewable sources in the last decade, with some leading in wind, solar, and hydroelectric power generation.
+Energy Distribution: Renewable energy sources such as wind, solar, and bioenergy have become a major component of global electricity production, surpassing traditional sources like coal and oil in some nations.
+Challenges & Opportunities: While many countries are moving toward cleaner energy, some still rely heavily on fossil fuels. This presents challenges but also opportunities for global energy policies and investments in renewables.
+Thank you for exploring this project! 🚀
